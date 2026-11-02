@@ -18,5 +18,17 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     
-    
+    private void OnTriggerEnter(Collider other)
+    {
+        // Check if the object we hit has the "Player" tag
+        if (other.CompareTag("Player"))
+        {
+            GameManager.Instance.LoseLife();
+            Destroy(gameObject); // Destroy the laser so it doesn't hit twice
+        }
+        // else if (other.CompareTag("Shield")) // Optional: if you add shields later
+        // {
+        //     Destroy(gameObject);
+        // }
+    }
 }

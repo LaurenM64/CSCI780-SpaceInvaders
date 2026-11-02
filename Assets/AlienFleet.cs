@@ -22,86 +22,137 @@ public class AlienFleet : MonoBehaviour
     [SerializeField] private bool movingDown = false;
 
     //For the varying speed of the fleet:
-    [SerializeField] private float baseSpeed = 0.025f;
-    [SerializeField] private float maxSpeedMultiplier = 2.5f; // How much faster they get at the very end
+    [SerializeField] private float baseSpeed = 0.02f;
+    [SerializeField] private float maxSpeedMultiplier = 3f; // How much faster they get at the very end
     private int startingAlienCount;
 
     //player reference for game over check
     [SerializeField] private Transform playerShip;
     [SerializeField] private float gameOverBuffer = .5f;
     
-    //LEVEL LAYOUT VARIABLES
-    // The Level 1 Layout (8 columns wide to give them room to move)
-    private int[,] currentLevelMap = {
-        { 1, 1, 1, 1, 1, 1, 1, 1 },
-        { 0, 1, 1, 1, 1, 1, 1, 0 },
-        { 0, 0, 1, 1, 1, 1, 0, 0 }
-    };
 
 
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+       
+//moved spawn code to its own LoadLevel function so it can call new levels without restarting the game
+    }
+    public void LoadLevel(int level)
+    {
+        // 1. WIPE THE BOARD
+        foreach (Transform child in transform) {
+            Destroy(child.gameObject);
+        }
+        aliens.Clear(); 
+        startingAlienCount = 0; 
 
-        // Find the edges of the screen dynamically based on the camera to not get bogged down on hardcoding coords
-        // 1. Get the depth distance from the camera to the game plane
+        // 2. PICK THE LEVEL MATRIX
+        int[,] currentLevelMap;
+        switch (level)
+        {
+            case 4: 
+                currentLevelMap = new int[,] {
+                    { 0, 0, 1, 1, 1, 1, 0, 0 },
+                    { 0, 1, 1, 1, 1, 1, 1, 0 },
+                    { 1, 1, 1, 1, 1, 1, 1, 1 },
+                    { 0, 1, 1, 1, 1, 1, 1, 0 },
+                    { 0, 0, 1, 1, 1, 1, 0, 0 },
+                    
+                };
+                break;
+            case 3: 
+
+                currentLevelMap = new int[,] {
+                    { 1, 1, 1, 1, 1, 1, 1, 1 },
+                    { 0, 1, 1, 1, 1, 1, 1, 0 },
+                    { 0, 0, 1, 1, 1, 1, 0, 0 },
+                    { 0, 0, 0, 1, 1, 0, 0, 0 }
+                };
+                break;
+            case 2:
+                currentLevelMap = new int[,] {
+                    { 0, 0, 1, 0, 0 },
+                    { 1, 1, 1, 1, 1},
+                    { 1, 1, 0, 1, 1 },
+                    { 1, 0, 0, 0, 1 }
+                };
+                break;
+            default: 
+                currentLevelMap = new int[,] {
+                    { 1, 0, 0, 0, 0 ,0,1},
+                    { 0, 1, 0, 0, 0,1,0 },
+                    { 0, 0, 1, 0, 1,0,0 },
+                    { 0, 0, 0, 1, 0,0,0 }
+                };
+                break;
+        }
+
+        // 3. CALCULATE BOUNDARIES EXACTLY WHEN NEEDED
         float zDistance = Mathf.Abs(Camera.main.transform.position.z);
-        
-        // 2. Find the absolute corners of the screen dynamically
         Vector3 screenBottomLeft = Camera.main.ViewportToWorldPoint(new Vector3(0, 0, zDistance));
         Vector3 screenTopRight = Camera.main.ViewportToWorldPoint(new Vector3(1, 1, zDistance));
 
-        // 3. Set padded boundaries for movement and failsafes
         leftBound = screenBottomLeft.x + 1f; 
         rightBound = screenTopRight.x - 1f;
         lowerBound = screenBottomLeft.y + 1f;
-        
-        upperBound = screenTopRight.y ; // 1 unit below the top edge to start spawning
+        upperBound = screenTopRight.y;
 
-
-        // 4. Spawn the grid using the dynamic boundaries instead of hardcoded numbers
-
-        // Read the dimensions of the level map
+        // 4. CALCULATE SPAWN POINTS
         int rows = currentLevelMap.GetLength(0);
         int cols = currentLevelMap.GetLength(1);
         float rspacing = 1f;
         float cspacing = 2f;
-
-        // Start spawning slightly inward from the absolute edge so we don't spawn offscreen
         float startX = leftBound + 3f; 
         float startY = upperBound - 1f;
 
+        // 5. SPAWN THE ALIENS
         for (int r = 0; r < rows; r++)
         {
             for (int c = 0; c < cols; c++)
             {
-                // Only spawn an alien if the matrix has a 1
                 if (currentLevelMap[r, c] == 1)
                 {
                     GameObject alien = Instantiate<GameObject>(alienPrefab);
-                    
-                    // Calculate position based on the current row (r) and column (c)
                     alien.transform.position = new Vector3(startX + (c * cspacing), startY - (r * rspacing), 0);
+                    alien.transform.SetParent(this.transform); 
                     
                     aliens.Add(alien);
                     alien.GetComponent<Alien>().fleet = this;
                 }
             }
         }
-    //record current starting alien count for later speed scaling
-        startingAlienCount = aliens.Count;
 
+        // 6. RESET FLEET VARIABLES
+        startingAlienCount = aliens.Count;
+        speed = baseSpeed; 
+        movingDown = false;
     }
+
+
+   
+
+//END LOADING LEVEL CODE
+
+
 
     // Update is called once per frame
     void Update()
-    {
-        //alienCounter.score = aliens.Count;
+    { //VICTORY CHECK
+    //note: if we dont check startingAlienCount > 0, it will trigger victory on the first frame of the game before any aliens spawn
+        if (GameManager.Instance.IsPlaying && startingAlienCount > 0 && aliens.Count == 0)        {
+        GameManager.Instance.TriggerVictory();
+        }
     }
 
     void FixedUpdate()
     {
+
+        // SAFETY LOCK: Do absolutely nothing if there are no aliens
+        if (aliens.Count == 0) return;
+
+
         //SPEED: the math to calculate the speed multiplier based on the number of remaining aliens
         if (startingAlienCount > 0 && aliens.Count > 0)
         {
@@ -155,7 +206,7 @@ public class AlienFleet : MonoBehaviour
         if (playerShip != null && bottom <= (playerShip.position.y+gameOverBuffer))
         {
             Debug.Log("GAME OVER: The fleet reached the ship!");
-            Time.timeScale = 0; // Freezes the game engine
+            GameManager.Instance.TriggerGameOver();
             return; // Stops running the rest of the movement code this frame
         }
 

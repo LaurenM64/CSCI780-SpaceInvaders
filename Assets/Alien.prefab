@@ -127,6 +127,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Alien
   bulletPrefab: {fileID: 7610636192705906877, guid: 498e6913ce0fd46619bff73e9fcf3840, type: 3}
   fleet: {fileID: 0}
-  bulletSpawnRate: 0.002
+  bulletSpawnRate: 0.01
   lastShot: 0
-  shotCooldown: 0.1
+  shotCooldown: 0.025
